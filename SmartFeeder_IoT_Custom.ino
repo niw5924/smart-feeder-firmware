@@ -14,14 +14,85 @@ WebServer server(80);
 const char* AP_SSID = "SmartFeeder_Setup";
 const char* AP_PASS = "12345678";
 
+String buildWifiOptionsHtml() {
+  int n = WiFi.scanNetworks(false, false);
+  String opt = "";
+
+  if (n <= 0) {
+    opt += "<option value=''>스캔된 Wi-Fi 없음</option>";
+    return opt;
+  }
+
+  for (int i = 0; i < n; i++) {
+    String ssid = WiFi.SSID(i);
+    ssid.trim();
+    if (ssid.length() == 0) continue;
+
+    opt += "<option value='";
+    opt += ssid;
+    opt += "'>";
+    opt += ssid;
+    opt += "</option>";
+  }
+
+  if (opt.length() == 0) {
+    opt += "<option value=''>스캔된 Wi-Fi 없음</option>";
+  }
+
+  return opt;
+}
+
+String pageHtml() {
+  String options = buildWifiOptionsHtml();
+
+  String h;
+  h += "<!doctype html><html><head><meta charset='utf-8'/>";
+  h += "<meta name='viewport' content='width=device-width, initial-scale=1'/>";
+  h += "<title>SmartFeeder WiFi</title></head><body style='font-family:sans-serif;padding:18px;'>";
+  h += "<h2>Wi-Fi 설정</h2>";
+  h += "<form method='POST' action='/save'>";
+  h += "<label>Wi-Fi 선택</label><br/>";
+  h += "<select name='ssid' style='width:100%;padding:10px;margin:8px 0;'>";
+  h += options;
+  h += "</select>";
+  h += "<label>비밀번호</label><br/>";
+  h += "<input name='pass' type='password' style='width:100%;padding:10px;margin:8px 0;'/>";
+  h += "<button style='padding:12px 14px;margin-top:10px;width:100%;'>확인</button>";
+  h += "</form>";
+  h += "<p style='margin-top:14px;'><a href='/'>다시 스캔</a></p>";
+  h += "</body></html>";
+  return h;
+}
+
 void startApAndWeb() {
-  WiFi.mode(WIFI_MODE_AP);
+  WiFi.mode(WIFI_MODE_APSTA);
   WiFi.softAP(AP_SSID, AP_PASS);
 
   IPAddress ip = WiFi.softAPIP();
 
   server.on("/", []() {
-    server.send(200, "text/plain", "Hello! SmartFeeder Web is running.");
+    server.send(200, "text/html", pageHtml());
+  });
+
+  server.on("/save", []() {
+    if (server.method() != HTTP_POST) {
+      server.send(405, "text/plain", "Method Not Allowed");
+      return;
+    }
+
+    String ssid = server.arg("ssid");
+    String pass = server.arg("pass");
+    ssid.trim();
+    pass.trim();
+
+    Serial.println("=== WIFI INPUT ===");
+    Serial.print("SSID: ");
+    Serial.println(ssid);
+    Serial.print("PASS: ");
+    Serial.println(pass);
+
+    server.sendHeader("Location", "/");
+    server.send(303);
   });
 
   server.begin();
@@ -44,6 +115,7 @@ void setup() {
   servo.write(180);
 
   Serial.begin(115200);
+  delay(800);
 
   startApAndWeb();
 }
