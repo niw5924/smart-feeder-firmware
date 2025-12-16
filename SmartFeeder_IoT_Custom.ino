@@ -16,9 +16,21 @@ const char* AP_PASS = "12345678";
 
 String g_targetSsid = "";
 String g_targetPass = "";
+
 bool g_connectRequested = false;
 bool g_connecting = false;
+
 unsigned long g_connectStartMs = 0;
+const unsigned long CONNECT_TIMEOUT_MS = 30000;
+
+int g_connState = 0;
+
+String g_connectedSsid = "";
+String g_bssidStr = "";
+String g_errorMsg = "";
+
+unsigned long g_successAtMs = 0;
+bool g_apOffDone = false;
 
 String wifiStatusText(wl_status_t st) {
   switch (st) {
@@ -72,7 +84,7 @@ String buildWifiOptionsHtml() {
   return opt;
 }
 
-String pageHtml() {
+String pageHtml(const String& bannerText, bool isError) {
   String options = buildWifiOptionsHtml();
 
   String h;
@@ -80,11 +92,24 @@ String pageHtml() {
   h += "<meta name='viewport' content='width=device-width, initial-scale=1'/>";
   h += "<title>SmartFeeder WiFi</title>";
   h += "<style>";
+  h += "body{font-family:sans-serif;padding:18px;}";
+  h += ".banner{padding:12px 12px;border-radius:10px;margin:0 0 14px 0;font-size:14px;line-height:1.4;}";
+  h += ".ok{background:#eef7ff;border:1px solid #cfe6ff;color:#0b3b66;}";
+  h += ".err{background:#fff1f1;border:1px solid #ffd0d0;color:#7a1111;}";
   h += "select,input{width:100%;box-sizing:border-box;padding:10px;margin:8px 0;font-size:16px;}";
   h += "button{width:100%;box-sizing:border-box;padding:12px 14px;margin-top:10px;font-size:16px;}";
-  h += "body{font-family:sans-serif;padding:18px;}";
+  h += "a{color:#1a73e8;text-decoration:none;}";
   h += "</style></head><body>";
   h += "<h2>Wi-Fi 설정</h2>";
+
+  if (bannerText.length() > 0) {
+    h += "<div class='banner ";
+    h += (isError ? "err" : "ok");
+    h += "'>";
+    h += bannerText;
+    h += "</div>";
+  }
+
   h += "<form method='POST' action='/save'>";
   h += "<label>Wi-Fi 선택</label><br/>";
   h += "<select name='ssid'>";
@@ -92,7 +117,7 @@ String pageHtml() {
   h += "</select>";
   h += "<label>비밀번호</label><br/>";
   h += "<input name='pass' type='password'/>";
-  h += "<button type='submit'>확인</button>";
+  h += "<button type='submit'>연결</button>";
   h += "</form>";
   h += "<p style='margin-top:14px;'><a href='/'>다시 스캔</a></p>";
   h += "</body></html>";
@@ -107,32 +132,70 @@ String connectingHtml() {
   h += "<style>";
   h += "body{font-family:sans-serif;padding:18px;}";
   h += ".box{padding:14px;border:1px solid #ddd;border-radius:10px;}";
+  h += ".row{display:flex;align-items:center;gap:10px;}";
+  h += ".spinner{width:22px;height:22px;border:3px solid #ddd;border-top-color:#1a73e8;border-radius:50%;animation:spin 1s linear infinite;}";
+  h += "@keyframes spin{to{transform:rotate(360deg);}}";
+  h += ".muted{color:#666;font-size:13px;line-height:1.45;}";
   h += "</style></head><body>";
-  h += "<h2>연결 중...</h2>";
+  h += "<h2>연결 중</h2>";
   h += "<div class='box'>";
-  h += "<p>선택한 Wi-Fi로 접속을 시도하고 있어요.</p>";
-  h += "<p>연결되면 AP 모드가 꺼지고, 기기는 공유기 네트워크로 이동합니다.</p>";
-  h += "<p id='st'>상태 확인 중...</p>";
+  h += "<div class='row'><div class='spinner'></div><div><b>Wi-Fi에 접속하고 있어요</b></div></div>";
+  h += "<p class='muted'>잠시만 기다려 주세요. 연결이 완료되면 안내 화면으로 이동합니다.</p>";
   h += "</div>";
   h += "<script>";
   h += "async function tick(){";
   h += "  try{";
   h += "    const r=await fetch('/status',{cache:'no-store'});";
   h += "    const j=await r.json();";
-  h += "    document.getElementById('st').innerText='status: '+j.status+' | ip: '+(j.ip||'-')+' | ap: '+j.ap;";
-  h += "  }catch(e){";
-  h += "    document.getElementById('st').innerText='상태 확인 실패(연결 전환 중일 수 있어요)';";
-  h += "  }";
+  h += "    if(j.done===1){ location.href='/done'; }";
+  h += "    if(j.fail===1){ location.href='/fail'; }";
+  h += "  }catch(e){}";
   h += "}";
-  h += "setInterval(tick, 1000); tick();";
+  h += "setInterval(tick, 800); tick();";
   h += "</script>";
   h += "</body></html>";
   return h;
 }
 
+String doneHtml() {
+  String h;
+  h += "<!doctype html><html><head><meta charset='utf-8'/>";
+  h += "<meta name='viewport' content='width=device-width, initial-scale=1'/>";
+  h += "<title>Done</title>";
+  h += "<style>";
+  h += "body{font-family:sans-serif;padding:18px;}";
+  h += ".box{padding:14px;border:1px solid #ddd;border-radius:10px;}";
+  h += ".ok{background:#eef7ff;border:1px solid #cfe6ff;border-radius:10px;padding:12px;margin:0 0 14px 0;color:#0b3b66;}";
+  h += ".muted{color:#666;font-size:13px;line-height:1.55;}";
+  h += ".mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:13px;word-break:break-all;}";
+  h += "</style></head><body>";
+  h += "<h2>연결 완료</h2>";
+  h += "<div class='ok'><b>Wi-Fi 연결이 완료됐어요.</b><br/>앱으로 돌아가서 다음 단계를 진행해 주세요.</div>";
+  h += "<div class='box'>";
+  h += "<div class='muted'>연결된 Wi-Fi</div>";
+  h += "<div class='mono'>";
+  h += (g_connectedSsid.length() > 0 ? g_connectedSsid : "-");
+  h += "</div>";
+  h += "<div class='muted' style='margin-top:12px;'>이제 앱으로 돌아가 주세요.</div>";
+  h += "</div>";
+  h += "</body></html>";
+  return h;
+}
+
+String failHtml() {
+  String msg = g_errorMsg;
+  if (msg.length() == 0) msg = "연결에 실패했어요. 다시 선택하고 비밀번호를 입력해 주세요.";
+  return pageHtml(msg, true);
+}
+
 void beginStaConnect(const String& ssid, const String& pass) {
   g_connecting = true;
   g_connectStartMs = millis();
+  g_connState = 1;
+
+  g_connectedSsid = "";
+  g_bssidStr = "";
+  g_errorMsg = "";
 
   Serial.println("=== WIFI CONNECT START ===");
   Serial.print("Target SSID: ");
@@ -146,6 +209,32 @@ void beginStaConnect(const String& ssid, const String& pass) {
   WiFi.begin(ssid.c_str(), pass.c_str());
 }
 
+void restoreAp() {
+  WiFi.disconnect(true);
+  WiFi.scanDelete();
+  delay(200);
+
+  WiFi.mode(WIFI_MODE_APSTA);
+  WiFi.softAP(AP_SSID, AP_PASS);
+
+  Serial.println("=== AP RESTORED ===");
+  Serial.print("AP IP: http://");
+  Serial.println(WiFi.softAPIP());
+}
+
+void applyApOffStaOnly() {
+  if (g_apOffDone) return;
+
+  WiFi.softAPdisconnect(true);
+  WiFi.mode(WIFI_MODE_STA);
+
+  Serial.println("=== AP OFF / STA ONLY ===");
+  Serial.print("Now open: http://");
+  Serial.println(WiFi.localIP());
+
+  g_apOffDone = true;
+}
+
 void startApAndWeb() {
   WiFi.mode(WIFI_MODE_APSTA);
   WiFi.disconnect(true);
@@ -157,23 +246,38 @@ void startApAndWeb() {
   IPAddress ip = WiFi.softAPIP();
 
   server.on("/", []() {
-    server.send(200, "text/html", pageHtml());
+    String banner = "";
+    bool isError = false;
+
+    if (g_connState == 3) {
+      banner = g_errorMsg.length() > 0 ? g_errorMsg : "연결에 실패했어요. 다시 시도해 주세요.";
+      isError = true;
+    } else if (g_connState == 2) {
+      banner = "이미 Wi-Fi에 연결되어 있어요. 필요하면 다시 설정할 수 있어요.";
+      isError = false;
+    }
+
+    server.send(200, "text/html", pageHtml(banner, isError));
+  });
+
+  server.on("/fail", []() {
+    server.send(200, "text/html", failHtml());
+  });
+
+  server.on("/done", []() {
+    server.send(200, "text/html", doneHtml());
   });
 
   server.on("/status", []() {
-    String ipStr = (WiFi.status() == WL_CONNECTED) ? WiFi.localIP().toString() : "";
-    String apStr = (WiFi.getMode() == WIFI_MODE_AP || WiFi.getMode() == WIFI_MODE_APSTA) ? "on" : "off";
+    int done = (g_connState == 2) ? 1 : 0;
+    int fail = (g_connState == 3) ? 1 : 0;
 
     String json = "{";
-    json += "\"status\":\"";
-    json += wifiStatusText(WiFi.status());
-    json += "\",";
-    json += "\"ip\":\"";
-    json += ipStr;
-    json += "\",";
-    json += "\"ap\":\"";
-    json += apStr;
-    json += "\"";
+    json += "\"done\":";
+    json += String(done);
+    json += ",";
+    json += "\"fail\":";
+    json += String(fail);
     json += "}";
 
     server.send(200, "application/json", json);
@@ -191,7 +295,9 @@ void startApAndWeb() {
     pass.trim();
 
     if (ssid.length() == 0) {
-      server.send(400, "text/plain", "SSID is empty");
+      g_connState = 3;
+      g_errorMsg = "Wi-Fi를 선택해 주세요.";
+      server.send(200, "text/html", failHtml());
       return;
     }
 
@@ -203,7 +309,9 @@ void startApAndWeb() {
 
     g_targetSsid = ssid;
     g_targetPass = pass;
+
     g_connectRequested = true;
+    g_apOffDone = false;
 
     server.send(200, "text/html", connectingHtml());
   });
@@ -243,43 +351,40 @@ void loop() {
 
   if (g_connecting) {
     if (WiFi.status() == WL_CONNECTED) {
-      IPAddress staIp = WiFi.localIP();
+      g_connectedSsid = WiFi.SSID();
+      g_bssidStr = WiFi.BSSIDstr();
 
       Serial.println("=== WIFI CONNECTED ===");
       Serial.print("STA IP: ");
-      Serial.println(staIp);
+      Serial.println(WiFi.localIP());
       Serial.print("CONNECTED SSID: ");
-      Serial.println(WiFi.SSID());
+      Serial.println(g_connectedSsid);
       Serial.print("BSSID: ");
-      Serial.println(WiFi.BSSIDstr());
-
-      WiFi.softAPdisconnect(true);
-      WiFi.mode(WIFI_MODE_STA);
-
-      Serial.println("=== AP OFF / STA ONLY ===");
-      Serial.print("Now open: http://");
-      Serial.println(staIp);
+      Serial.println(g_bssidStr);
 
       g_connecting = false;
+      g_connState = 2;
+      g_successAtMs = millis();
+      g_errorMsg = "";
     } else {
-      if (millis() - g_connectStartMs > 60000) {
+      if (millis() - g_connectStartMs > CONNECT_TIMEOUT_MS) {
         Serial.println("=== WIFI CONNECT TIMEOUT ===");
         Serial.print("Status: ");
         Serial.println(wifiStatusText(WiFi.status()));
 
         g_connecting = false;
+        g_connState = 3;
 
-        WiFi.disconnect(true);
-        WiFi.scanDelete();
-        delay(200);
+        g_errorMsg = "연결에 실패했어요. Wi-Fi/비밀번호를 확인하고 다시 시도해 주세요.";
 
-        WiFi.mode(WIFI_MODE_APSTA);
-        WiFi.softAP(AP_SSID, AP_PASS);
-
-        Serial.println("=== AP RESTORED ===");
-        Serial.print("AP IP: http://");
-        Serial.println(WiFi.softAPIP());
+        restoreAp();
       }
+    }
+  }
+
+  if (g_connState == 2 && !g_apOffDone) {
+    if (millis() - g_successAtMs > 8000) {
+      applyApOffStaOnly();
     }
   }
 
