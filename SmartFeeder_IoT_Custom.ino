@@ -1,6 +1,7 @@
 #include <WiFi.h>
 #include <WebServer.h>
 #include <Servo.h>
+#include <Preferences.h>
 
 const int motor_pin1 = D2;
 const int motor_pin2 = D3;
@@ -10,6 +11,7 @@ const int servo_pin = D6;
 Servo servo;
 
 WebServer server(80);
+Preferences prefs;
 
 const char* AP_SSID = "SmartFeeder_Setup";
 const char* AP_PASS = "12345678";
@@ -31,6 +33,24 @@ String g_errorMsg = "";
 
 unsigned long g_successAtMs = 0;
 bool g_apOffDone = false;
+
+bool g_serverStarted = false;
+bool g_isAutoAttempt = false;
+
+void saveWifiCreds(const String& ssid, const String& pass) {
+  prefs.begin("wifi", false);
+  prefs.putString("ssid", ssid);
+  prefs.putString("pass", pass);
+  prefs.end();
+}
+
+bool loadWifiCreds(String& ssid, String& pass) {
+  prefs.begin("wifi", true);
+  ssid = prefs.getString("ssid", "");
+  pass = prefs.getString("pass", "");
+  prefs.end();
+  return ssid.length() > 0;
+}
 
 String wifiStatusText(wl_status_t st) {
   switch (st) {
@@ -200,17 +220,28 @@ void beginStaConnect(const String& ssid, const String& pass) {
   Serial.println("=== WIFI CONNECT START ===");
   Serial.print("Target SSID: ");
   Serial.println(ssid);
+  Serial.print("Mode: ");
+  Serial.println(g_isAutoAttempt ? "AUTO(STORED)" : "MANUAL(WEB)");
 
-  WiFi.mode(WIFI_MODE_APSTA);
-  WiFi.disconnect(true);
+  if (g_isAutoAttempt) {
+    WiFi.mode(WIFI_MODE_STA);
+  } else {
+    WiFi.mode(WIFI_MODE_APSTA);
+  }
+
+  WiFi.disconnect(false, true);
   WiFi.scanDelete();
   delay(200);
+
+  if (!g_isAutoAttempt) {
+    WiFi.softAP(AP_SSID, AP_PASS);
+  }
 
   WiFi.begin(ssid.c_str(), pass.c_str());
 }
 
 void restoreAp() {
-  WiFi.disconnect(true);
+  WiFi.disconnect(false, true);
   WiFi.scanDelete();
   delay(200);
 
@@ -237,7 +268,7 @@ void applyApOffStaOnly() {
 
 void startApAndWeb() {
   WiFi.mode(WIFI_MODE_APSTA);
-  WiFi.disconnect(true);
+  WiFi.disconnect(false, true);
   WiFi.scanDelete();
   delay(200);
 
@@ -310,6 +341,7 @@ void startApAndWeb() {
     g_targetSsid = ssid;
     g_targetPass = pass;
 
+    g_isAutoAttempt = false;
     g_connectRequested = true;
     g_apOffDone = false;
 
@@ -317,7 +349,9 @@ void startApAndWeb() {
   });
 
   server.begin();
+  g_serverStarted = true;
 
+  Serial.println("=== AP SETUP MODE ON ===");
   Serial.print("AP SSID: ");
   Serial.println(AP_SSID);
   Serial.print("Open: http://");
@@ -338,11 +372,32 @@ void setup() {
   Serial.begin(115200);
   delay(800);
 
-  startApAndWeb();
+  String ssid, pass;
+  bool hasSaved = loadWifiCreds(ssid, pass);
+
+  Serial.println("=== BOOT ===");
+  Serial.print("Saved SSID: ");
+  Serial.println(hasSaved ? ssid : "-");
+  Serial.print("Saved PASS LEN: ");
+  Serial.println(hasSaved ? String(pass.length()) : String(0));
+
+  if (hasSaved) {
+    Serial.println("Saved Wi-Fi found. Trying STA auto connect.");
+    g_targetSsid = ssid;
+    g_targetPass = pass;
+    g_apOffDone = true;
+    g_isAutoAttempt = true;
+    beginStaConnect(g_targetSsid, g_targetPass);
+  } else {
+    Serial.println("No saved Wi-Fi. Starting AP setup mode.");
+    startApAndWeb();
+  }
 }
 
 void loop() {
-  server.handleClient();
+  if (g_serverStarted) {
+    server.handleClient();
+  }
 
   if (g_connectRequested && !g_connecting) {
     g_connectRequested = false;
@@ -354,6 +409,8 @@ void loop() {
       g_connectedSsid = WiFi.SSID();
       g_bssidStr = WiFi.BSSIDstr();
 
+      saveWifiCreds(g_targetSsid, g_targetPass);
+
       Serial.println("=== WIFI CONNECTED ===");
       Serial.print("STA IP: ");
       Serial.println(WiFi.localIP());
@@ -361,6 +418,14 @@ void loop() {
       Serial.println(g_connectedSsid);
       Serial.print("BSSID: ");
       Serial.println(g_bssidStr);
+
+      if (g_isAutoAttempt) {
+        Serial.println("=== AUTO CONNECT SUCCESS ===");
+      } else {
+        Serial.println("=== MANUAL CONNECT SUCCESS ===");
+      }
+
+      g_isAutoAttempt = false;
 
       g_connecting = false;
       g_connState = 2;
@@ -374,10 +439,17 @@ void loop() {
 
         g_connecting = false;
         g_connState = 3;
-
         g_errorMsg = "연결에 실패했어요. Wi-Fi/비밀번호를 확인하고 다시 시도해 주세요.";
 
-        restoreAp();
+        if (!g_serverStarted) {
+          Serial.println("Auto connect failed. Starting AP setup mode.");
+          startApAndWeb();
+        } else {
+          Serial.println("Connect failed. Restoring AP.");
+          restoreAp();
+        }
+
+        g_isAutoAttempt = false;
       }
     }
   }
