@@ -37,6 +37,12 @@ bool g_apOffDone = false;
 bool g_serverStarted = false;
 bool g_isAutoAttempt = false;
 
+String g_deviceId = "";
+
+String makeDeviceId() {
+  return "SF-" + String((uint32_t)ESP.getEfuseMac(), HEX);
+}
+
 void saveWifiCreds(const String& ssid, const String& pass) {
   prefs.begin("wifi", false);
   prefs.putString("ssid", ssid);
@@ -371,6 +377,11 @@ void setup() {
 
   Serial.begin(115200);
   delay(800);
+
+  g_deviceId = makeDeviceId();
+  g_deviceId.toUpperCase();
+  Serial.print("DEVICE ID: ");
+  Serial.println(g_deviceId);
 
   String ssid, pass;
   bool hasSaved = loadWifiCreds(ssid, pass);
