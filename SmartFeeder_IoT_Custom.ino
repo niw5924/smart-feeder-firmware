@@ -196,14 +196,22 @@ String doneHtml() {
   h += ".mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:13px;word-break:break-all;}";
   h += "</style></head><body>";
   h += "<h2>연결 완료</h2>";
-  h += "<div class='ok'><b>Wi-Fi 연결이 완료됐어요.</b><br/>앱으로 돌아가서 다음 단계를 진행해 주세요.</div>";
+  h += "<div class='ok'><b>Wi-Fi 연결이 완료됐어요.</b><br/>앱 화면으로 이동합니다.</div>";
   h += "<div class='box'>";
   h += "<div class='muted'>연결된 Wi-Fi</div>";
   h += "<div class='mono'>";
   h += (g_connectedSsid.length() > 0 ? g_connectedSsid : "-");
   h += "</div>";
-  h += "<div class='muted' style='margin-top:12px;'>이제 앱으로 돌아가 주세요.</div>";
   h += "</div>";
+  h += "<script>";
+  h += "try{";
+  h += "  if(window.WifiSetup && WifiSetup.postMessage){";
+  h += "    WifiSetup.postMessage(JSON.stringify({type:'wifi_done', deviceId:'";
+  h += g_deviceId;
+  h += "'}));";
+  h += "  }";
+  h += "}catch(e){}";
+  h += "</script>";
   h += "</body></html>";
   return h;
 }
