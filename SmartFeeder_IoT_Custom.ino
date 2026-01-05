@@ -1,8 +1,8 @@
 #include <WiFi.h>
 #include <Servo.h>
-#include <Preferences.h>
 
 #include "wifi_portal.h"
+#include "wifi_store.h"
 
 const int motor_pin1 = D2;
 const int motor_pin2 = D3;
@@ -10,8 +10,6 @@ const int motor_button = D7;
 
 const int servo_pin = D6;
 Servo servo;
-
-Preferences prefs;
 
 const char* AP_SSID = "SmartFeeder_Setup";
 const char* AP_PASS = "12345678";
@@ -40,21 +38,6 @@ String g_deviceId = "";
 
 String makeDeviceId() {
   return "SF-" + String((uint32_t)ESP.getEfuseMac(), HEX);
-}
-
-void saveWifiCreds(const String& ssid, const String& pass) {
-  prefs.begin("wifi", false);
-  prefs.putString("ssid", ssid);
-  prefs.putString("pass", pass);
-  prefs.end();
-}
-
-bool loadWifiCreds(String& ssid, String& pass) {
-  prefs.begin("wifi", true);
-  ssid = prefs.getString("ssid", "");
-  pass = prefs.getString("pass", "");
-  prefs.end();
-  return ssid.length() > 0;
 }
 
 String wifiStatusText(wl_status_t st) {
@@ -170,7 +153,7 @@ void setup() {
   Serial.println(g_deviceId);
 
   String ssid, pass;
-  bool hasSaved = loadWifiCreds(ssid, pass);
+  bool hasSaved = wifiStoreLoad(ssid, pass);
 
   Serial.println("=== BOOT ===");
   Serial.print("Saved SSID: ");
@@ -204,7 +187,7 @@ void loop() {
       g_connectedSsid = WiFi.SSID();
       g_bssidStr = WiFi.BSSIDstr();
 
-      saveWifiCreds(g_targetSsid, g_targetPass);
+      wifiStoreSave(g_targetSsid, g_targetPass);
 
       Serial.println("=== WIFI CONNECTED ===");
       Serial.print("STA IP: ");
