@@ -3,6 +3,7 @@
 
 #include "wifi_portal.h"
 #include "wifi_store.h"
+#include "feed_control.h"
 
 const int motor_pin1 = D2;
 const int motor_pin2 = D3;
@@ -35,6 +36,8 @@ bool g_apOffDone = false;
 bool g_isAutoAttempt = false;
 
 String g_deviceId = "";
+
+uint8_t g_feedMethodCode = FEED_METHOD_FEED_BUTTON;
 
 String makeDeviceId() {
   return "SF-" + String((uint32_t)ESP.getEfuseMac(), HEX);
@@ -238,23 +241,5 @@ void loop() {
     }
   }
 
-  if (digitalRead(motor_button) == LOW) {
-    Serial.println("pressed");
-
-    servo.write(50);
-    delay(300);
-
-    digitalWrite(motor_pin1, HIGH);
-    digitalWrite(motor_pin2, HIGH);
-    delay(1000);
-
-    digitalWrite(motor_pin1, LOW);
-    digitalWrite(motor_pin2, LOW);
-    delay(300);
-
-    servo.write(180);
-    delay(500);
-
-    delay(300);
-  }
+  feedHandle(g_feedMethodCode, servo, motor_pin1, motor_pin2, motor_button);
 }
