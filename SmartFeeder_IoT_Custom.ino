@@ -4,16 +4,23 @@
 #include "wifi_portal.h"
 #include "wifi_store.h"
 #include "feed_control.h"
+#include "mqtt_client.h"
 
-const int motor_pin1 = D2;
-const int motor_pin2 = D3;
-const int motor_button = D7;
+int motor_pin1 = D2;
+int motor_pin2 = D3;
+int motor_button = D7;
 
 const int servo_pin = D6;
 Servo servo;
 
 const char* AP_SSID = "SmartFeeder_Setup";
 const char* AP_PASS = "12345678";
+
+const char* MQTT_HOST = "d1229804bb2a42cd87dedd808119a65b.s1.eu.hivemq.cloud";
+const uint16_t MQTT_PORT = 8883;
+
+const char* MQTT_USER = "Oowni";
+const char* MQTT_PASS = "Inwoo0203!@";
 
 String g_targetSsid = "";
 String g_targetPass = "";
@@ -155,6 +162,8 @@ void setup() {
   Serial.print("DEVICE ID: ");
   Serial.println(g_deviceId);
 
+  mqttInit(MQTT_HOST, MQTT_PORT, MQTT_USER, MQTT_PASS, g_deviceId);
+
   String ssid, pass;
   bool hasSaved = wifiStoreLoad(ssid, pass);
 
@@ -241,5 +250,11 @@ void loop() {
     }
   }
 
-  feedHandle(g_feedMethodCode, servo, motor_pin1, motor_pin2, motor_button);
+  mqttTick(g_connState);
+
+  if (mqttConsumeFeedNow()) {
+    feedButtonRunNow();
+  }
+
+  feedMethodTick(g_feedMethodCode);
 }

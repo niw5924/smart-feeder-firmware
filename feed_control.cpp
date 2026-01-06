@@ -1,62 +1,61 @@
 #include "feed_control.h"
+#include <Servo.h>
 
-static void handleFeedButton(
-  Servo& servo,
-  int motorPin1,
-  int motorPin2,
-  int feedButtonPin
-) {
-  if (digitalRead(feedButtonPin) == LOW) {
-    Serial.println("pressed");
+extern int motor_pin1;
+extern int motor_pin2;
+extern int motor_button;
+extern Servo servo;
 
-    servo.write(50);
-    delay(300);
+static void runFeedButtonSequence() {
+  servo.write(50);
+  delay(300);
 
-    digitalWrite(motorPin1, HIGH);
-    digitalWrite(motorPin2, HIGH);
-    delay(1000);
+  digitalWrite(motor_pin1, HIGH);
+  digitalWrite(motor_pin2, HIGH);
+  delay(1000);
 
-    digitalWrite(motorPin1, LOW);
-    digitalWrite(motorPin2, LOW);
-    delay(300);
+  digitalWrite(motor_pin1, LOW);
+  digitalWrite(motor_pin2, LOW);
+  delay(300);
 
-    servo.write(180);
-    delay(500);
+  servo.write(180);
+  delay(500);
 
-    delay(300);
+  delay(300);
+}
+
+void feedButtonRunNow() {
+  Serial.println("feed_button remote");
+  runFeedButtonSequence();
+}
+
+static void feedButtonTick() {
+  if (digitalRead(motor_button) == LOW) {
+    Serial.println("feed_button local");
+    runFeedButtonSequence();
   }
 }
 
-static void handleUltrasonic(Servo& servo, int motorPin1, int motorPin2) {
-  (void)servo;
-  (void)motorPin1;
-  (void)motorPin2;
+static void ultrasonicTick() {
+  Serial.println("ultrasonic tick");
 }
 
-static void handleIntervalTimer(Servo& servo, int motorPin1, int motorPin2) {
-  (void)servo;
-  (void)motorPin1;
-  (void)motorPin2;
+static void intervalTimerTick() {
+  Serial.println("interval_timer tick");
 }
 
-void feedHandle(
-  uint8_t methodCode,
-  Servo& servo,
-  int motorPin1,
-  int motorPin2,
-  int feedButtonPin
-) {
+void feedMethodTick(uint8_t methodCode) {
   switch (methodCode) {
     case FEED_METHOD_FEED_BUTTON:
-      handleFeedButton(servo, motorPin1, motorPin2, feedButtonPin);
+      feedButtonTick();
       break;
 
     case FEED_METHOD_ULTRASONIC:
-      handleUltrasonic(servo, motorPin1, motorPin2);
+      ultrasonicTick();
       break;
 
     case FEED_METHOD_INTERVAL_TIMER:
-      handleIntervalTimer(servo, motorPin1, motorPin2);
+      intervalTimerTick();
       break;
 
     default:
