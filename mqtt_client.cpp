@@ -16,6 +16,10 @@ static const unsigned long MQTT_RETRY_MS = 3000;
 
 static volatile bool g_feedNowRequested = false;
 
+static String statusTopic() {
+  return String("feeder/") + g_deviceId + "/status";
+}
+
 static String lastTopicSegment(const char* topic) {
   String t(topic);
   int idx = t.lastIndexOf('/');
@@ -67,17 +71,39 @@ static void ensureConnected() {
 
   const String clientId = String("sf-") + g_deviceId;
 
+  const String willTopic = statusTopic();
+  const char* willPayload = "offline";
+  const int willQos = 1;
+  const bool willRetain = true;
+
   bool ok = false;
   if (g_username.length() > 0) {
-    ok = g_mqtt.connect(clientId.c_str(), g_username.c_str(), g_password.c_str());
+    ok = g_mqtt.connect(
+      clientId.c_str(),
+      g_username.c_str(),
+      g_password.c_str(),
+      willTopic.c_str(),
+      willQos,
+      willRetain,
+      willPayload
+    );
   } else {
-    ok = g_mqtt.connect(clientId.c_str());
+    ok = g_mqtt.connect(
+      clientId.c_str(),
+      willTopic.c_str(),
+      willQos,
+      willRetain,
+      willPayload
+    );
   }
 
   if (!ok) {
     Serial.println("mqtt connect failed");
     return;
   }
+
+  const String st = statusTopic();
+  g_mqtt.publish(st.c_str(), "online", true);
 
   const String sub = String("feeder/") + g_deviceId + "/#";
   g_mqtt.subscribe(sub.c_str());
@@ -100,4 +126,12 @@ bool mqttConsumeFeedNow() {
     return true;
   }
   return false;
+}
+
+void mqttPublishOfflineNow() {
+  if (!g_mqtt.connected()) return;
+
+  const String st = statusTopic();
+  g_mqtt.publish(st.c_str(), "offline", true);
+  g_mqtt.disconnect();
 }

@@ -72,6 +72,8 @@ String wifiStatusText(wl_status_t st) {
 }
 
 void beginStaConnect(const String& ssid, const String& pass) {
+  mqttPublishOfflineNow();
+
   g_connecting = true;
   g_connectStartMs = millis();
   g_connState = 1;

@@ -11,3 +11,4 @@ void mqttInit(
 
 void mqttTick(int connState);
 bool mqttConsumeFeedNow();
+void mqttPublishOfflineNow();
