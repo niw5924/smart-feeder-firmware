@@ -16,8 +16,16 @@ static const unsigned long MQTT_RETRY_MS = 3000;
 
 static volatile bool g_feedNowRequested = false;
 
-static String statusTopic() {
-  return String("feeder/") + g_deviceId + "/status";
+static String presenceTopic() {
+  return String("feeder/") + g_deviceId + "/presence";
+}
+
+static String activityStateTopic() {
+  return String("feeder/") + g_deviceId + "/activity/state";
+}
+
+static String activityEventTopic() {
+  return String("feeder/") + g_deviceId + "/activity/event";
 }
 
 static String lastTopicSegment(const char* topic) {
@@ -71,7 +79,7 @@ static void ensureConnected() {
 
   const String clientId = String("sf-") + g_deviceId;
 
-  const String willTopic = statusTopic();
+  const String willTopic = presenceTopic();
   const char* willPayload = "offline";
   const int willQos = 1;
   const bool willRetain = true;
@@ -102,8 +110,11 @@ static void ensureConnected() {
     return;
   }
 
-  const String st = statusTopic();
-  g_mqtt.publish(st.c_str(), "online", true);
+  const String pr = presenceTopic();
+  g_mqtt.publish(pr.c_str(), "online", true);
+
+  const String ast = activityStateTopic();
+  g_mqtt.publish(ast.c_str(), "idle", true);
 
   const String sub = String("feeder/") + g_deviceId + "/#";
   g_mqtt.subscribe(sub.c_str());
@@ -131,7 +142,22 @@ bool mqttConsumeFeedNow() {
 void mqttPublishOfflineNow() {
   if (!g_mqtt.connected()) return;
 
-  const String st = statusTopic();
-  g_mqtt.publish(st.c_str(), "offline", true);
+  const String ast = activityStateTopic();
+  g_mqtt.publish(ast.c_str(), "unknown", true);
+
+  const String pr = presenceTopic();
+  g_mqtt.publish(pr.c_str(), "offline", true);
   g_mqtt.disconnect();
+}
+
+void mqttPublishActivityState(const char* state, bool retain) {
+  if (!g_mqtt.connected()) return;
+  const String tp = activityStateTopic();
+  g_mqtt.publish(tp.c_str(), state, retain);
+}
+
+void mqttPublishActivityEvent(const char* eventName, bool retain) {
+  if (!g_mqtt.connected()) return;
+  const String tp = activityEventTopic();
+  g_mqtt.publish(tp.c_str(), eventName, retain);
 }

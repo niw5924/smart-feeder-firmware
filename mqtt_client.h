@@ -12,3 +12,6 @@ void mqttInit(
 void mqttTick(int connState);
 bool mqttConsumeFeedNow();
 void mqttPublishOfflineNow();
+
+void mqttPublishActivityState(const char* state, bool retain = true);
+void mqttPublishActivityEvent(const char* eventName, bool retain = false);

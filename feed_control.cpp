@@ -1,6 +1,8 @@
 #include "feed_control.h"
 #include <Servo.h>
 
+#include "mqtt_client.h"
+
 extern int motor_pin1;
 extern int motor_pin2;
 extern int motor_button;
@@ -24,15 +26,25 @@ static void runFeedButtonSequence() {
   delay(300);
 }
 
+static void runFeedSequenceWithEvent(const char* startedEvent, const char* finishedEvent) {
+  mqttPublishActivityEvent(startedEvent, false);
+  mqttPublishActivityState("feeding", true);
+
+  runFeedButtonSequence();
+
+  mqttPublishActivityState("idle", true);
+  mqttPublishActivityEvent(finishedEvent, false);
+}
+
 void feedButtonRunNow() {
   Serial.println("feed_button remote");
-  runFeedButtonSequence();
+  runFeedSequenceWithEvent("feeding_started_remote", "feeding_finished_remote");
 }
 
 static void feedButtonTick() {
   if (digitalRead(motor_button) == LOW) {
     Serial.println("feed_button local");
-    runFeedButtonSequence();
+    runFeedSequenceWithEvent("feeding_started_local", "feeding_finished_local");
   }
 }
 
