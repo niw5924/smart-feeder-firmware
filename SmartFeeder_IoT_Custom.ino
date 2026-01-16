@@ -145,6 +145,32 @@ WifiPortalBindings makeWifiPortalBindings() {
   return b;
 }
 
+void handleDeviceDelete() {
+  Serial.println("=== DEVICE DELETE START ===");
+
+  mqttPublishOfflineNow();
+
+  wifiStoreClear();
+
+  WiFi.disconnect(true, true);
+  WiFi.scanDelete();
+  delay(200);
+
+  g_targetSsid = "";
+  g_targetPass = "";
+  g_connectRequested = false;
+  g_connecting = false;
+  g_isAutoAttempt = false;
+  g_apOffDone = false;
+
+  g_connState = 0;
+  g_errorMsg = "기기가 삭제(초기화) 되었어요. 다시 등록해 주세요.";
+
+  wifiPortalRestart(AP_SSID, AP_PASS, makeWifiPortalBindings(), true);
+
+  Serial.println("=== DEVICE DELETE DONE ===");
+}
+
 void setup() {
   pinMode(motor_pin1, OUTPUT);
   pinMode(motor_pin2, OUTPUT);
@@ -253,6 +279,11 @@ void loop() {
   }
 
   mqttTick(g_connState);
+
+  if (mqttConsumeResetNow()) {
+    handleDeviceDelete();
+    return;
+  }
 
   if (mqttConsumeFeedNow()) {
     feedButtonRunNow();

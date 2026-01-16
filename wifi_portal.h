@@ -18,5 +18,8 @@ struct WifiPortalBindings {
 };
 
 void wifiPortalStart(const char* apSsid, const char* apPass, const WifiPortalBindings& b);
+void wifiPortalStop(bool apOff = false);
+void wifiPortalRestart(const char* apSsid, const char* apPass, const WifiPortalBindings& b, bool apOffBeforeRestart = true);
+
 bool wifiPortalIsStarted();
 void wifiPortalHandleClient();

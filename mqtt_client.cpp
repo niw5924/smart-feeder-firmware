@@ -15,6 +15,7 @@ static unsigned long g_lastTryMs = 0;
 static const unsigned long MQTT_RETRY_MS = 3000;
 
 static volatile bool g_feedNowRequested = false;
+static volatile bool g_resetRequested = false;
 
 static String presenceTopic() {
   return String("feeder/") + g_deviceId + "/presence";
@@ -49,6 +50,8 @@ static void onMqttMessage(char* topic, byte* payload, unsigned int length) {
 
   if (action == "feed_button") {
     g_feedNowRequested = true;
+  } else if (action == "device_delete" || action == "factory_reset") {
+    g_resetRequested = true;
   }
 }
 
@@ -134,6 +137,14 @@ void mqttTick(int connState) {
 bool mqttConsumeFeedNow() {
   if (g_feedNowRequested) {
     g_feedNowRequested = false;
+    return true;
+  }
+  return false;
+}
+
+bool mqttConsumeResetNow() {
+  if (g_resetRequested) {
+    g_resetRequested = false;
     return true;
   }
   return false;

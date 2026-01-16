@@ -17,3 +17,11 @@ bool wifiStoreLoad(String& ssid, String& pass) {
   prefs.end();
   return ssid.length() > 0;
 }
+
+bool wifiStoreClear() {
+  prefs.begin("wifi", false);
+  prefs.remove("ssid");
+  prefs.remove("pass");
+  prefs.end();
+  return true;
+}

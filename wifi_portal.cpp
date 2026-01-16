@@ -160,6 +160,16 @@ void wifiPortalHandleClient() {
   server.handleClient();
 }
 
+void wifiPortalStop(bool apOff) {
+  if (started) {
+    server.stop();
+    started = false;
+  }
+  if (apOff) {
+    WiFi.softAPdisconnect(true);
+  }
+}
+
 void wifiPortalStart(const char* apSsid, const char* apPass, const WifiPortalBindings& b) {
   if (started) return;
 
@@ -256,4 +266,10 @@ void wifiPortalStart(const char* apSsid, const char* apPass, const WifiPortalBin
   Serial.println(AP_SSID);
   Serial.print("Open: http://");
   Serial.println(ip);
+}
+
+void wifiPortalRestart(const char* apSsid, const char* apPass, const WifiPortalBindings& b, bool apOffBeforeRestart) {
+  wifiPortalStop(apOffBeforeRestart);
+  delay(200);
+  wifiPortalStart(apSsid, apPass, b);
 }
