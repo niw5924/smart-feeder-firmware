@@ -5,6 +5,7 @@
 #include "wifi_store.h"
 #include "feed_control.h"
 #include "mqtt_client.h"
+#include "secrets.h"
 
 int motor_pin1 = D2;
 int motor_pin2 = D3;
@@ -13,14 +14,14 @@ int motor_button = D7;
 const int servo_pin = D6;
 Servo servo;
 
-const char* AP_SSID = "SmartFeeder_Setup";
-const char* AP_PASS = "12345678";
+const char* kApSsid = AP_SSID;
+const char* kApPass = AP_PASS;
 
-const char* MQTT_HOST = "d1229804bb2a42cd87dedd808119a65b.s1.eu.hivemq.cloud";
-const uint16_t MQTT_PORT = 8883;
+const char* kMqttHost = MQTT_HOST;
+const uint16_t kMqttPort = MQTT_PORT;
 
-const char* MQTT_USER = "Oowni";
-const char* MQTT_PASS = "Inwoo0203!@";
+const char* kMqttUser = MQTT_USER;
+const char* kMqttPass = MQTT_PASS;
 
 String g_targetSsid = "";
 String g_targetPass = "";
@@ -99,7 +100,7 @@ void beginStaConnect(const String& ssid, const String& pass) {
   delay(200);
 
   if (!g_isAutoAttempt) {
-    WiFi.softAP(AP_SSID, AP_PASS);
+    WiFi.softAP(kApSsid, kApPass);
   }
 
   WiFi.begin(ssid.c_str(), pass.c_str());
@@ -111,7 +112,7 @@ void restoreAp() {
   delay(200);
 
   WiFi.mode(WIFI_MODE_APSTA);
-  WiFi.softAP(AP_SSID, AP_PASS);
+  WiFi.softAP(kApSsid, kApPass);
 
   Serial.println("=== AP RESTORED ===");
   Serial.print("AP IP: http://");
@@ -166,7 +167,7 @@ void handleDeviceDelete() {
   g_connState = 0;
   g_errorMsg = "기기가 삭제(초기화) 되었어요. 다시 등록해 주세요.";
 
-  wifiPortalRestart(AP_SSID, AP_PASS, makeWifiPortalBindings(), true);
+  wifiPortalRestart(kApSsid, kApPass, makeWifiPortalBindings(), true);
 
   Serial.println("=== DEVICE DELETE DONE ===");
 }
@@ -190,7 +191,7 @@ void setup() {
   Serial.print("DEVICE ID: ");
   Serial.println(g_deviceId);
 
-  mqttInit(MQTT_HOST, MQTT_PORT, MQTT_USER, MQTT_PASS, g_deviceId);
+  mqttInit(kMqttHost, kMqttPort, kMqttUser, kMqttPass, g_deviceId);
 
   String ssid, pass;
   bool hasSaved = wifiStoreLoad(ssid, pass);
@@ -210,7 +211,7 @@ void setup() {
     beginStaConnect(g_targetSsid, g_targetPass);
   } else {
     Serial.println("No saved Wi-Fi. Starting AP setup mode.");
-    wifiPortalStart(AP_SSID, AP_PASS, makeWifiPortalBindings());
+    wifiPortalStart(kApSsid, kApPass, makeWifiPortalBindings());
   }
 }
 
@@ -261,7 +262,7 @@ void loop() {
 
         if (!wifiPortalIsStarted()) {
           Serial.println("Auto connect failed. Starting AP setup mode.");
-          wifiPortalStart(AP_SSID, AP_PASS, makeWifiPortalBindings());
+          wifiPortalStart(kApSsid, kApPass, makeWifiPortalBindings());
         } else {
           Serial.println("Connect failed. Restoring AP.");
           restoreAp();
